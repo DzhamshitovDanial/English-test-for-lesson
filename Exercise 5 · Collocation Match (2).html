@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Exercise 5 · Collocation Match</title>
+<style>
+:root{
+  color-scheme:dark;
+  --bg:#0d1117;--surface:#161b22;--surface-2:#1f2630;--border:#30363d;
+  --text:#e6edf3;--muted:#8b949e;--accent:#58a6ff;--ok:#3fb950;--err:#f85149;
+  --s1:4px;--s2:8px;--s3:12px;--s4:16px;--s5:24px;
+  --r1:4px;--r2:8px;
+  box-sizing:border-box;
+  padding-top:env(safe-area-inset-top,0px);
+  padding-bottom:env(safe-area-inset-bottom,0px);
+}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+*,*::before,*::after{box-sizing:inherit}
+body{
+  margin:0;background:var(--bg);color:var(--text);
+  font:400 16px/1.4 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+  -webkit-tap-highlight-color:transparent;
+}
+.wrap{max-width:480px;margin:0 auto;padding:var(--s5) var(--s4)}
+header{display:flex;justify-content:space-between;align-items:flex-start;gap:var(--s3)}
+.eyebrow{font-size:13px;color:var(--muted);margin:0}
+h1{font-size:22px;font-weight:600;margin:var(--s1) 0 0;line-height:1.2}
+.score{font-size:13px;font-weight:600;color:var(--muted);border:1px solid var(--border);border-radius:var(--r2);padding:var(--s1) var(--s2);white-space:nowrap}
+.hint{margin:var(--s3) 0 var(--s4)}
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--r2)}
+.box{padding:var(--s3);margin-bottom:var(--s4)}
+.label{font-size:13px;color:var(--muted);margin:0 0 var(--s2)}
+.words{display:flex;flex-wrap:wrap;gap:var(--s2);min-height:40px}
+.chip{
+  background:var(--surface-2);border:1px solid var(--border);border-radius:var(--r2);
+  padding:var(--s2) var(--s3);min-height:40px;display:inline-flex;align-items:center;
+  font:600 16px/1 inherit;color:var(--text);cursor:grab;touch-action:none;user-select:none;-webkit-user-select:none;
+}
+.chip.sel{border-color:var(--accent)}
+.chip.drag{opacity:.35}
+.chip.used{display:none}
+.ghost{position:fixed;z-index:10;pointer-events:none;border-color:var(--accent);margin:0}
+.ghost.back{transition:left .2s ease,top .2s ease}
+ol{list-style:none;margin:0;padding:0}
+.row{display:flex;align-items:center;gap:var(--s3);min-height:56px;padding:var(--s2) var(--s3);border-top:1px solid var(--border)}
+.row:first-child{border-top:0}
+.num{width:24px;font-size:13px;color:var(--muted);flex:none}
+.slot{
+  flex:none;width:152px;height:40px;display:flex;align-items:center;justify-content:center;
+  border:1px dashed var(--border);border-radius:var(--r2);background:var(--bg);
+  font-weight:600;color:var(--text);padding:0 var(--s2);white-space:nowrap;
+}
+.slot.hot{border-color:var(--accent);border-style:solid}
+.slot.ok{border:1px solid var(--ok);color:var(--ok);background:var(--surface-2)}
+.slot.err{border:1px solid var(--err);color:var(--err);background:var(--surface-2)}
+.text{flex:1;min-width:0}
+.done{margin:var(--s4) 0 0;font-weight:600;color:var(--ok);text-align:center}
+.done[hidden]{display:none}
+button.reset{
+  display:block;width:100%;margin-top:var(--s4);min-height:48px;
+  background:transparent;color:var(--accent);border:1px solid var(--accent);border-radius:var(--r2);
+  font:600 16px/1 inherit;cursor:pointer;
+}
+button.reset:active{background:var(--surface)}
+.confetti{position:fixed;left:0;top:0;width:100%;height:100%;pointer-events:none;z-index:20}
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <p class="eyebrow">Exercise 5</p>
+      <h1>Collocation Match</h1>
+    </div>
+    <div class="score" id="score">0 / 10</div>
+  </header>
+  <p class="hint">Fill in with the words from the box.</p>
+
+  <section class="card box">
+    <p class="label">Box</p>
+    <div class="words" id="words"></div>
+  </section>
+
+  <section class="card">
+    <ol id="list"></ol>
+  </section>
+
+  <p class="done" id="done" hidden>Done: all 10 correct</p>
+  <button class="reset" id="reset" type="button">Restart</button>
+</div>
+
+<script>
+(function(){
+  var ITEMS=[
+    {a:"high-definition",pre:"",post:"graphics"},
+    {a:"live",pre:"",post:"feed"},
+    {a:"flora",pre:"",post:"and fauna"},
+    {a:"generate",pre:"",post:"electricity"},
+    {a:"monitor",pre:"",post:"weather conditions"},
+    {a:"breaking",pre:"",post:"news"},
+    {a:"collector\u2019s",pre:"",post:"item"},
+    {a:"built-in",pre:"",post:"microphone"},
+    {a:"independent",pre:"",post:"learner"},
+    {a:"must-have",pre:"",post:"gadget"}
+  ];
+  var BOX=["breaking","live","flora","monitor","high-definition","built-in","must-have","generate","independent","collector\u2019s"];
+
+  var wordsEl=document.getElementById("words"),listEl=document.getElementById("list"),
+      scoreEl=document.getElementById("score"),doneEl=document.getElementById("done");
+  var chips={},slots=[],solved=0,selected=null,busy={};
+
+  function build(){
+    wordsEl.innerHTML="";listEl.innerHTML="";chips={};slots=[];solved=0;selected=null;busy={};
+    if(cfCanvas){cancelAnimationFrame(cfRaf);cfCanvas.remove();cfCanvas=null;}
+    doneEl.hidden=true;update();
+    BOX.forEach(function(w){
+      var c=document.createElement("div");
+      c.className="chip";c.textContent=w;c.dataset.w=w;
+      c.addEventListener("pointerdown",onDown);
+      chips[w]=c;wordsEl.appendChild(c);
+    });
+    ITEMS.forEach(function(it,i){
+      var li=document.createElement("li");li.className="row";
+      var n=document.createElement("span");n.className="num";n.textContent=i+1;
+      var s=document.createElement("div");s.className="slot";s.dataset.i=i;
+      s.addEventListener("click",function(){ if(selected) tryPlace(selected,i); });
+      var t=document.createElement("span");t.className="text";t.textContent=it.post;
+      li.appendChild(n);li.appendChild(s);li.appendChild(t);listEl.appendChild(li);
+      slots.push(s);
+    });
+  }
+
+  function update(){
+    scoreEl.textContent=solved+" / 10";
+    doneEl.hidden=solved<10;
+    if(solved===10) confetti();
+  }
+
+  function select(w){
+    if(selected&&chips[selected]) chips[selected].classList.remove("sel");
+    selected=(selected===w)?null:w;
+    if(selected) chips[selected].classList.add("sel");
+  }
+
+  function tryPlace(w,i){
+    var s=slots[i];
+    if(s.classList.contains("ok")||busy[i]) return false;
+    if(selected&&chips[selected]) chips[selected].classList.remove("sel");
+    selected=null;
+    if(ITEMS[i].a===w){
+      s.textContent=w;s.className="slot ok";
+      chips[w].classList.add("used");
+      solved++;update();return true;
+    }
+    busy[i]=true;
+    s.textContent=w;s.className="slot err";
+    setTimeout(function(){
+      s.textContent="";s.className="slot";busy[i]=false;
+    },400);
+    return false;
+  }
+
+  function slotAt(x,y){
+    var el=document.elementFromPoint(x,y);
+    return el&&el.closest?el.closest(".slot"):null;
+  }
+
+  function onDown(e){
+    var chip=e.currentTarget,w=chip.dataset.w;
+    if(chip.classList.contains("used")) return;
+    e.preventDefault();
+    var r=chip.getBoundingClientRect();
+    var sx=e.clientX,sy=e.clientY,dx=sx-r.left,dy=sy-r.top,moved=false,ghost=null,hot=null;
+    try{chip.setPointerCapture(e.pointerId);}catch(_){}
+
+    function move(ev){
+      if(!moved&&Math.hypot(ev.clientX-sx,ev.clientY-sy)<6) return;
+      if(!moved){
+        moved=true;
+        ghost=chip.cloneNode(true);
+        ghost.className="chip ghost";
+        ghost.style.width=r.width+"px";
+        document.body.appendChild(ghost);
+        chip.classList.add("drag");
+        if(selected&&chips[selected]){chips[selected].classList.remove("sel");selected=null;}
+      }
+      ghost.style.left=(ev.clientX-dx)+"px";
+      ghost.style.top=(ev.clientY-dy)+"px";
+      var s=slotAt(ev.clientX,ev.clientY);
+      if(hot&&hot!==s) hot.classList.remove("hot");
+      if(s&&!s.classList.contains("ok")&&!s.classList.contains("err")){s.classList.add("hot");hot=s;}
+      else hot=null;
+    }
+    function up(ev){
+      chip.removeEventListener("pointermove",move);
+      chip.removeEventListener("pointerup",up);
+      chip.removeEventListener("pointercancel",up);
+      if(hot) hot.classList.remove("hot");
+      if(!moved){ select(w); return; }
+      var s=slotAt(ev.clientX,ev.clientY);
+      var ok=false;
+      if(s&&ev.type==="pointerup") ok=tryPlace(w,+s.dataset.i);
+      if(ok||!ghost){ if(ghost) ghost.remove(); chip.classList.remove("drag"); return; }
+      // wrong or dropped outside: fly back to the box
+      var br=chip.getBoundingClientRect();
+      ghost.classList.add("back");
+      ghost.style.left=br.left+"px";ghost.style.top=br.top+"px";
+      setTimeout(function(){ghost.remove();chip.classList.remove("drag");},220);
+    }
+    chip.addEventListener("pointermove",move);
+    chip.addEventListener("pointerup",up);
+    chip.addEventListener("pointercancel",up);
+  }
+
+  var cfCanvas=null,cfRaf=0;
+  function confetti(){
+    if(cfCanvas) return;
+    var cv=document.createElement("canvas");cv.className="confetti";
+    document.body.appendChild(cv);cfCanvas=cv;
+    var dpr=window.devicePixelRatio||1,W=window.innerWidth,H=window.innerHeight;
+    cv.width=W*dpr;cv.height=H*dpr;
+    var ctx=cv.getContext("2d");ctx.scale(dpr,dpr);
+    var cols=["#58a6ff","#3fb950","#f85149","#e6edf3","#d29922"],ps=[],i;
+    for(i=0;i<160;i++){
+      ps.push({
+        x:Math.random()*W,y:-20-Math.random()*H*0.6,
+        vx:(Math.random()-0.5)*3,vy:2+Math.random()*3.5,
+        w:6+Math.random()*6,h:3+Math.random()*4,
+        r:Math.random()*6.28,vr:(Math.random()-0.5)*0.3,
+        c:cols[i%cols.length]
+      });
+    }
+    var t0=performance.now();
+    function frame(t){
+      var el=t-t0;
+      ctx.clearRect(0,0,W,H);
+      ps.forEach(function(p){
+        p.x+=p.vx+Math.sin((p.y+p.x)/40)*0.6;p.y+=p.vy;p.r+=p.vr;
+        ctx.save();ctx.translate(p.x,p.y);ctx.rotate(p.r);
+        ctx.fillStyle=p.c;ctx.fillRect(-p.w/2,-p.h/2,p.w,p.h);ctx.restore();
+      });
+      if(el<5000){cfRaf=requestAnimationFrame(frame);}
+      else{cv.remove();cfCanvas=null;}
+    }
+    cfRaf=requestAnimationFrame(frame);
+  }
+
+  document.getElementById("reset").addEventListener("click",build);
+  build();
+})();
+</script>
+</body>
+</html>
